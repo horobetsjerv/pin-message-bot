@@ -11,11 +11,19 @@ const store = {
 
 // Обработчик команды /post
 bot.command("post", async (ctx) => {
+  const deleteCommand = async () => {
+    try {
+      await ctx.deleteMessage();
+    } catch (e) {
+      console.error("Не удалось удалить сообщение:", e);
+    }
+  };
+
   // Проверяем, что команда вызвана в ответ на сообщение
   if (!ctx.message.reply_to_message) {
-    return ctx.reply(
-      "Ответьте на сообщение командой /post чтобы закрепить его"
-    );
+    await ctx.reply("Ответьте на сообщение командой /post чтобы закрепить его");
+    await deleteCommand(); // Удаляем команду
+    return;
   }
 
   // Сохраняем данные
@@ -28,21 +36,47 @@ bot.command("post", async (ctx) => {
     await ctx.telegram.pinChatMessage(store.chatId, store.pinnedMessage);
 
     // Сохраняем ID системного сообщения (последнее сообщение в чате)
-    const messages = await ctx.telegram.getChatHistory(store.chatId, 1, 0, 1);
-    store.systemMessageId = messages[0].message_id;
+
+    await deleteCommand(); // Удаляем команду после успешного выполнения
   } catch (e) {
     console.error("Ошибка при закреплении:", e);
+    await deleteCommand(); // Удаляем команду даже при ошибке
   }
 });
 
+bot.command("stop", async (ctx) => {
+  store.pinnedMessage = null;
+  await ctx.deleteMessage();
+});
+
 // Настраиваем cron-задачу (каждые 30 секунд для теста)
-cron.schedule("*/30 * * * * *", async () => {
+bot.on("message", async (ctx) => {
+  if (
+    ctx.message.new_chat_members ||
+    ctx.message.pinned_message ||
+    ctx.message.left_chat_member
+  ) {
+    store.systemMessageId = ctx.message.message_id;
+
+    try {
+      //   await ctx.deleteMessage();
+      //   console.log(`Удалено системное сообщение: ${ctx.message.message_id}`);
+    } catch (error) {
+      console.error("Ошибка при удалении сообщения:", error);
+    }
+  }
+});
+cron.schedule("*/15 * * * * *", async () => {
   if (!store.chatId || !store.pinnedMessage) return;
 
   try {
     // 1. Удаляем системное сообщение о закреплении
+    // console.log(store.systemMessageId);
     if (store.systemMessageId) {
-      await bot.telegram.deleteMessage(store.chatId, store.systemMessageId);
+      console.log(store.systemMessageId);
+      await bot.telegram
+        .deleteMessage(store.chatId, store.systemMessageId)
+        .catch((e) => console.log("Системное сообщение уже удалено"));
     }
 
     // 2. Открепляем сообщение
@@ -52,8 +86,8 @@ cron.schedule("*/30 * * * * *", async () => {
     await bot.telegram.pinChatMessage(store.chatId, store.pinnedMessage);
 
     // 4. Обновляем ID системного сообщения
-    const chat = await ctx.telegram.getChat(store.chatId);
-    store.systemMessageId = chat.message_id;
+    // const chat = await ctx.telegram.getChat(store.chatId);
+    // store.systemMessageId = chat.message_id;
   } catch (e) {
     console.error("Ошибка в cron-задаче:", e);
   }
