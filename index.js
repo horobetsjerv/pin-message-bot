@@ -8,7 +8,6 @@ const store = {
   systemMessageId: null,
   chatId: null,
 };
-
 // Обработчик команды /post
 bot.command("post", async (ctx) => {
   const deleteCommand = async () => {
@@ -66,7 +65,7 @@ bot.on("message", async (ctx) => {
     }
   }
 });
-cron.schedule("*/15 * * * * *", async () => {
+cron.schedule("0 */2 * * *", async () => {
   if (!store.chatId || !store.pinnedMessage) return;
 
   try {
